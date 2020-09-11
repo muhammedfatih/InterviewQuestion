@@ -1,7 +1,9 @@
-﻿using InterviewQuestion.Models;
+﻿using FastMember;
+using InterviewQuestion.Models;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 
 namespace InterviewQuestion
@@ -24,12 +26,34 @@ namespace InterviewQuestion
             /// Place your answer after this section
             ///////////////////////////////////
 
-            
+            var type = typeof(QueryResultTable);
+            var accessor = TypeAccessor.Create(type);
+            var properties = accessor.GetMembers();
+
+            var propertyQueryElements = properties.Join(queryElements, property => property.Name, queryElement => $"column{queryElement.Index}", (property, queryElement) => new { property = property.Name, aggregate = queryElement.Aggregate }).ToList();
+
+            queryResultTables.AsEnumerable().AsParallel().GroupBy(x => x.perfdate, (_, groups) =>
+            {
+                var first = groups.FirstOrDefault();
+                foreach (var propertyQueryElement in propertyQueryElements)
+                {
+                    var aggregate = propertyQueryElement.aggregate;
+                    var property = propertyQueryElement.property;
+                    var sourceAsIntList = groups.Where(x => accessor[x, property]!=null && !string.IsNullOrWhiteSpace(accessor[x, property].ToString())).Select(x => Convert.ToInt32(accessor[x, property]));
+
+                    if (aggregate == Enums.AggregateType.avg) accessor[first, property] = sourceAsIntList.Average().ToString();
+                    if (aggregate == Enums.AggregateType.max) accessor[first, property] = sourceAsIntList.Max().ToString();
+                    if (aggregate == Enums.AggregateType.min) accessor[first, property] = sourceAsIntList.Min().ToString();
+                    if (aggregate == Enums.AggregateType.sum) accessor[first, property] = sourceAsIntList.Sum().ToString();
+                }
+                return first;
+            }
+            ).ToList();
 
             ////////////////////////////////////
             /// Place your answer before this section
             ///////////////////////////////////
-            
+
             // Stop Timer
             stopWatch.Stop();
 
